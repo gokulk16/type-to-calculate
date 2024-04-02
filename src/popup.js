@@ -4,8 +4,8 @@ console.log("This is a popup that shows on clicking the extension!");
 import * as win from "./js/window.js";
 
 let defaultWindowSize = {
-  width: 550,
-  height: 420,
+  width: 500,
+  height: 370,
 };
 
 function getUid() {

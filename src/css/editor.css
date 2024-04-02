@@ -18,19 +18,20 @@ body {
 }
 
 .editor {
-  color: var(--primary);
-  background-color: transparent;
+  background-color: var(--input-background);
   appearance: none;
   border: none;
   outline: none;
   resize: none;
   width: 100%;
+  color: var(--input-number);
 }
 
 .output {
   overflow: visible;
   border-left: 1px solid var(--tertiary);
-  flex: 0 0 150px;
+  width: 37%;
+  background-color: var(--output-background);
 }
 
 .editor,
@@ -53,8 +54,8 @@ body {
 .output,
 .result-btn {
   font-family: var(--font-mono);
-  font-size: 14px;
-  line-height: 22px;
+  font-size: 37px;
+  line-height: 42px;
 }
 
 .result {
