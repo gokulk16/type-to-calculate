@@ -12,7 +12,7 @@
   "author": "gokulkathiresan1@gmail.com",
   "default_locale": "en",
 
-  "permissions": ["storage", "unlimitedStorage"],
+  "permissions": ["storage"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": "assets/images/favicon/favicon-32.png"

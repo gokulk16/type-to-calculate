@@ -11,7 +11,7 @@ let output;
 let docId;
 let lastEdit = []; // Last known edit by line
 let expressions = []; // All tokenized expressions by line
-
+const mexp = new Mexp();
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
@@ -322,6 +322,8 @@ function tokenize(value, src) {
             let val = tmp.trim();
 
             try {
+              console.log("in line 326 - - - ", value);
+
               result = mexp.eval(val);
             } catch (err) {
               result;
