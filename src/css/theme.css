@@ -15,9 +15,12 @@
   --primary: #191919;
   --secondary: #7f7f7f;
   --tertiary: #dedede;
-  --accent-result: #5000CF;
-  --accent-variable: #7f7f7f;
-  --accent-error: #D12500;
+  --accent-result: #6cace4;
+  --accent-variable: #ffffff;
+  --accent-error: #d12500;
+  --input-number: #c5f615;
+  --input-background: #343e50;
+  --output-background: #1e2b36;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,8 +32,8 @@
     --primary: #eaeaea;
     --secondary: #949496;
     --tertiary: #444548;
-    --accent-result: #B485FF;
+    --accent-result: #b485ff;
     --accent-variable: #949496;
-    --accent-error: #FF7557;
+    --accent-error: #ff7557;
   }
 }
