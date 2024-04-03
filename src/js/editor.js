@@ -41,7 +41,6 @@ function getDocId() {
 
   // Sanity check
   if (id && id !== "undefined") {
-    console.log("found the id", id);
     return id;
   } else {
     window.close();
@@ -322,8 +321,6 @@ function tokenize(value, src) {
             let val = tmp.trim();
 
             try {
-              console.log("in line 326 - - - ", value);
-
               result = mexp.eval(val);
             } catch (err) {
               result;
