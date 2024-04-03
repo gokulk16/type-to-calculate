@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Type To Calulate",
+  "name": "Type To Calculate",
   "description": "Just type in keyboard and do the math. No need to open the calculator.",
   "version": "1.0",
   "icons": {
