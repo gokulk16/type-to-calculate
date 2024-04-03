@@ -11,7 +11,7 @@ let output;
 let docId;
 let lastEdit = []; // Last known edit by line
 let expressions = []; // All tokenized expressions by line
-
+const mexp = new Mexp();
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
@@ -41,7 +41,6 @@ function getDocId() {
 
   // Sanity check
   if (id && id !== "undefined") {
-    console.log("found the id", id);
     return id;
   } else {
     window.close();

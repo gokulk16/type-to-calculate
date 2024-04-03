@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Type To Calulate",
+  "name": "Type To Calculate",
   "description": "Just type in keyboard and do the math. No need to open the calculator.",
   "version": "1.0",
   "icons": {
@@ -12,7 +12,7 @@
   "author": "gokulkathiresan1@gmail.com",
   "default_locale": "en",
 
-  "permissions": ["storage", "unlimitedStorage"],
+  "permissions": ["storage"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": "assets/images/favicon/favicon-32.png"
