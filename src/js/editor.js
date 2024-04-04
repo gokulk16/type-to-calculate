@@ -12,6 +12,14 @@ let docId;
 let lastEdit = []; // Last known edit by line
 let expressions = []; // All tokenized expressions by line
 const mexp = new Mexp();
+
+// allow x as a multipllcation token
+Mexp.addToken([{
+	type: 2,
+	token: "x",
+	show: "x",
+	value: mexp.math.eval
+}]);
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
