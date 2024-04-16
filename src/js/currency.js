@@ -1,7 +1,7 @@
 "use strict";
-// const lodash = require("lodash");
 import * as storage from "./storage.js";
 import * as constants from "./constants.js";
+const _ = require("lodash");
 
 /**
  * Fetches the latest currency conversion rates from the API and returns them.
@@ -44,7 +44,7 @@ export async function getConversionRates() {
     let currencyApiData;
     const cachedApiData = await storage.load('currenciesApiData', null);
 
-    if (cachedApiData) {
+    if (!_.isEmpty(cachedApiData)) {
         const time_last_update_unix = cachedApiData.time_last_update_unix;
         const currentTime = Date.now();
         const lastUpdateTime = new Date(time_last_update_unix * 1000);

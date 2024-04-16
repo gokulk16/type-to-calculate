@@ -1,13 +1,79 @@
 {
   "name": "type-to-calculate",
+  "description": "Just type in keyboard and do the math. No need to open the calculator.",
   "version": "1.0.0",
-  "description": "",
-  "main": "pop-up.js",
-  "scripts": {},
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "lodash": "^4.17.21"
+  "homepage": "https://github.com/gokulk16/type-to-calculate",
+  "author": "ENTER YOUR NAME HERE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gokulk16/type-to-calculate"
+  },
+  "scripts": {
+    "start": "xt-build -e dev -w",
+    "start:firefox": "xt-build -e dev -p firefox -w",
+    "build": "xt-clean && xt-build -e prod",
+    "build:firefox": "xt-build -e prod -p firefox",
+    "clean": "xt-clean",
+    "docs": "xt-docs",
+    "test": "xt-test",
+    "coverage": "nyc --reporter=lcov npm run test",
+    "sync": "xt-sync"
+  },
+  "babel": {
+    "presets": [
+      "@babel/preset-env"
+    ]
+  },
+  "eslintIgnore": [
+    "test/**/*"
+  ],
+  "devDependencies": {
+    "extension-cli": "^1.2.4",
+    "lodash": "^4.17.21",
+    "math-expression-evaluator": "^2.0.5"
+  },
+  "xtdocs": {
+    "source": {
+      "include": [
+        "README.md",
+        "src"
+      ]
+    }
+  },
+  "xtbuild": {
+    "dist": "./dist",
+    "source": "./src",
+    "releases": "./dist",
+    "release_name": "release",
+    "manifest": "./src/manifest.json",
+    "assets": [
+      "./assets/**/*"
+    ],
+    "copyAsIs": [
+      "./src/html/*",
+      "./src/css/**/*"
+    ],
+    "locales_dir": "./locales/",
+    "locales_list": [
+      "en"
+    ],
+    "js_bundles": [
+      {
+        "name": "background",
+        "src": "./src/background_worker.js"
+      },
+      {
+        "name": "popup",
+        "src": [
+          "./src/popup.js"
+        ]
+      },
+      {
+        "name": "editor",
+        "src": [
+          "./src/js/editor.js"
+        ]
+      }
+    ]
   }
 }
