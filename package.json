@@ -4,10 +4,12 @@
   "description": "",
   "main": "pop-up.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "browserify src/packages.js -o src/bundle.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {}
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
 }
