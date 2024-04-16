@@ -11,11 +11,15 @@
   },
   "author": "gokulkathiresan1@gmail.com",
   "default_locale": "en",
+  "minimum_chrome_version": "88",
 
   "permissions": ["storage"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": "assets/images/favicon/favicon-32.png"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "commands": {
     "_execute_action": {

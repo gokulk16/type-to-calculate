@@ -6,6 +6,7 @@ import * as currency from "./currency.js";
 import * as constants from "./constants.js";
 import * as regex from "./regex.js";
 import * as reserved from "./reserved.js";
+const Mexp = require('math-expression-evaluator')
 
 let editor;
 let output;
