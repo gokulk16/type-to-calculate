@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "pop-up.js",
-  "scripts": {
-    "build": "browserify src/packages.js -o src/bundle.js"
-  },
+  "scripts": {},
   "keywords": [],
   "author": "",
   "license": "ISC",
