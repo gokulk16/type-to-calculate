@@ -2,6 +2,7 @@
 
 import * as storage from "./storage.js";
 import * as win from "./window.js";
+import * as currency from "./currency.js";
 import * as constants from "./constants.js";
 import * as regex from "./regex.js";
 import * as reserved from "./reserved.js";
@@ -9,9 +10,11 @@ import * as reserved from "./reserved.js";
 let editor;
 let output;
 let docId;
+let conversionRates;
 let lastEdit = []; // Last known edit by line
 let expressions = []; // All tokenized expressions by line
 const mexp = new Mexp();
+
 // allow x as a multipllcation token
 mexp.addToken([{
   type: 2,
@@ -56,6 +59,7 @@ function getDocId() {
 
 async function loadData() {
   let data = await getData();
+  conversionRates = await currency.getConversionRates();
 
   if (data.text) {
     editor.innerText = data.text;

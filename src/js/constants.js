@@ -24,3 +24,5 @@ export const CONSTANTS = [
 ];
 
 export const IDENTIFIERS = ["pi", "e", "g", "phi"];
+
+export const cacheDuration = 24 * 60 * 60 * 1000; // Cache duration in milliseconds (24 hours)
