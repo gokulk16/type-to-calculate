@@ -12,20 +12,86 @@ let editor;
 let output;
 let docId;
 let conversionRates;
+let homeCurrency;
 let lastEdit = []; // Last known edit by line
 let expressions = []; // All tokenized expressions by line
 const mexp = new Mexp();
 
-// allow x as a multipllcation token
-mexp.addToken([{
-  type: 2,
-  token: "x",
-  show: "&times;",
-  value: mexp.math.mul
-}]);
+
 document.addEventListener("DOMContentLoaded", init);
 
+async function setupHomeCurrency() {
+  homeCurrency = 'INR'
+  // always set in upperCase
+}
+async function setupMexp() {
+  setupHomeCurrency()
+
+  // allow x as a multipllcation token
+  mexp.addToken([{
+    type: 2,
+    token: "x",
+    show: "&times;",
+    value: mexp.math.mul
+  }]);
+
+  try {
+    // setup conversionRates
+    conversionRates = await currency.getConversionRates();
+    var homeCurrencyConversionTokens = [];
+    var otherCurrencyConversionTokens = []
+    // Dynamically add conversion tokens for all supported currencies to home currency
+    // example, if 1 USD = 83 INR
+    Object.entries(conversionRates).forEach(([currencyCode, conversionRate]) => {
+      homeCurrencyConversionTokens.push({
+        type: 7,
+        token: currencyCode.toLowerCase(),
+        show: currencyCode.toUpperCase(),
+        value: function (n) {
+          return n * conversionRate[homeCurrency];
+        }
+      });
+    });
+    mexp.addToken([...homeCurrencyConversionTokens])
+
+    // dynamically adding conversion token to convert from one currency to another currency
+    // example: '1 usd to gbp' should consider 'usd to gbp' as token and do the conversion
+    // example: '1 usd in gbp' should consider 'usd in gbp' as token and do the conversion
+    Object.entries(conversionRates).forEach(([fromCurrencyCode, rates]) => {
+      Object.entries(rates).forEach(([toCurrencyCode, rate]) => {
+        const token = `${fromCurrencyCode.toLowerCase()} to ${toCurrencyCode.toLowerCase()}`;
+        otherCurrencyConversionTokens.push({
+          type: 7,
+          token: token,
+          show: `${fromCurrencyCode.toUpperCase()} to ${toCurrencyCode.toUpperCase()}`,
+          value: function (n) {
+            return n * rate;
+          }
+        });
+
+        otherCurrencyConversionTokens.push({
+          type: 7,
+          token: token,
+          show: `${fromCurrencyCode.toUpperCase()} in ${toCurrencyCode.toUpperCase()}`,
+          value: function (n) {
+            return n * rate; // Convert using the rate from fromCurrencyCode in toCurrencyCode
+          }
+        });
+
+      });
+    });
+    mexp.addToken([...otherCurrencyConversionTokens])
+
+  } catch (error) {
+    console.error("Error setting up currency tokens:", error);
+  }
+
+
+}
+
+
 async function init() {
+  await setupMexp();
   setupDocument();
   await loadData();
   setupListeners();
@@ -60,7 +126,6 @@ function getDocId() {
 
 async function loadData() {
   let data = await getData();
-  conversionRates = await currency.getConversionRates();
 
   if (data.text) {
     editor.innerText = data.text;
@@ -82,7 +147,7 @@ function setupListeners() {
   chrome.storage.onChanged.addListener(onStorageChanged);
 }
 
-let onWindowResize = debounce(async function (e) {
+let onWindowResize = debounce(async function () {
   let dimensions = await win.getWindowDimensions();
   let docData = await storage.load(docId, {});
 
@@ -147,7 +212,7 @@ function updateOutputDisplay() {
   }
 }
 
-let saveData = debounce(async function (e) {
+let saveData = debounce(async function () {
   let docData = await storage.load(docId, {});
   let text = editor.innerText;
   let title = getTitle(text);
@@ -170,7 +235,7 @@ let saveData = debounce(async function (e) {
 function getTitle(str) {
   if (str.length <= 0) return str;
   let maxLength = 30;
-  let trim = str.trim();
+  str = str.trim();
   let split = str.split("\n")[0];
   let substring = split.substring(0, maxLength);
 
@@ -190,7 +255,7 @@ function debounce(callback, wait) {
   };
 }
 
-async function onStorageChanged(changes, namespace) {
+async function onStorageChanged(changes) {
   if (changes[docId] && !document.hasFocus()) {
     let data = await getData();
 
@@ -408,13 +473,11 @@ function tokenize(value, src) {
 
     let boundary = /^(\d+(?:\.\d+)?)$/gm; // Any number with optional decimal point
 
-    if (value.match(boundary)) {
-      value = value;
-    } else {
+    if (!value.match(boundary)) {
       try {
         value = mexp.eval(value);
       } catch (err) {
-        value = value;
+        console.log('waiting for boundary in the expression')
       }
     }
 
@@ -480,9 +543,8 @@ function getResultTokens() {
         });
         break;
       case "expression":
-        let result = expression.result;
 
-        if (isNaN(result) || result == null) {
+        if (isNaN(expression.result) || expression.result == null) {
           results.push({
             type: "null",
             value: "",
@@ -490,7 +552,7 @@ function getResultTokens() {
         } else {
           results.push({
             type: "result",
-            value: result,
+            value: expression.result,
           });
         }
         break;
