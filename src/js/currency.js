@@ -2,7 +2,11 @@
 import * as storage from "./storage.js";
 import * as constants from "./constants.js";
 const _ = require("lodash");
+const countryToCurrency = require('country-to-currency');
 
+export function getHomeCurrency(country) {
+    return countryToCurrency[country.toUpperCase()].toUpperCase()
+}
 /**
  * Fetches the latest currency conversion rates from the API and returns them.
  * 

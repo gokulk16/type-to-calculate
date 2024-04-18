@@ -21,8 +21,19 @@ const mexp = new Mexp();
 document.addEventListener("DOMContentLoaded", init);
 
 async function setupHomeCurrency() {
-  homeCurrency = 'INR'
-  // always set in upperCase
+  // call http://ip-api.com/json/ and get the country and then match the country with currency
+  try {
+    const response = await fetch('http://ip-api.com/json/');
+    if (!response.ok) {
+      throw new Error('Failed to fetch country information');
+    }
+    const data = await response.json();
+    const country = data.countryCode;
+    homeCurrency = currency.getHomeCurrency(country);
+  } catch (error) {
+    console.error("Error fetching home currency:", error);
+    homeCurrency = 'USD'; // Fallback currency
+  }
 }
 async function setupMexp() {
   setupHomeCurrency()
