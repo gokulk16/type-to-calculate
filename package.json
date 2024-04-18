@@ -3,7 +3,7 @@
   "description": "Just type in keyboard and do the math. No need to open the calculator.",
   "version": "1.0.0",
   "homepage": "https://github.com/gokulk16/type-to-calculate",
-  "author": "ENTER YOUR NAME HERE",
+  "author": "https://github.com/gokulk16",
   "repository": {
     "type": "git",
     "url": "https://github.com/gokulk16/type-to-calculate"
@@ -13,11 +13,34 @@
     "start:firefox": "xt-build -e dev -p firefox -w",
     "build": "xt-clean && xt-build -e prod",
     "build:firefox": "xt-build -e prod -p firefox",
+    "watch": "npm-watch",
     "clean": "xt-clean",
     "docs": "xt-docs",
     "test": "xt-test",
     "coverage": "nyc --reporter=lcov npm run test",
     "sync": "xt-sync"
+  },
+  "watch": {
+    "build": {
+      "patterns": [
+        "src",
+        "assets",
+        "locales"
+      ],
+      "extensions": "js,html,css,json",
+      "legacyWatch": true,
+      "delay": 2500,
+      "runOnChangeOnly": false
+    },
+    "test": {
+      "patterns": [
+        "test"
+      ],
+      "extensions": ".js",
+      "legacyWatch": true,
+      "delay": 2500,
+      "runOnChangeOnly": false
+    }
   },
   "babel": {
     "presets": [
@@ -28,9 +51,11 @@
     "test/**/*"
   ],
   "devDependencies": {
+    "country-to-currency": "^1.1.5",
     "extension-cli": "^1.2.4",
     "lodash": "^4.17.21",
-    "math-expression-evaluator": "^2.0.5"
+    "math-expression-evaluator": "^2.0.5",
+    "npm-watch": "^0.11.0"
   },
   "xtdocs": {
     "source": {
