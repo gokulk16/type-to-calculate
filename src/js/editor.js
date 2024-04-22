@@ -7,12 +7,14 @@ import * as constants from "./constants.js";
 import * as regex from "./regex.js";
 import * as reserved from "./reserved.js";
 const Mexp = require('math-expression-evaluator')
+const _ = require("lodash");
 
 let editor;
 let output;
 let docId;
 let conversionRates;
 let homeCurrency;
+let addedMexpTokens = []; // records all tokens are added to mexp while execution. Holds only the token string.
 let lastEdit = []; // Last known edit by line
 let expressions = []; // All tokenized expressions by line
 const mexp = new Mexp();
@@ -21,25 +23,58 @@ const mexp = new Mexp();
 document.addEventListener("DOMContentLoaded", init);
 
 async function setupHomeCurrency() {
-  // call http://ip-api.com/json/ and get the country and then match the country with currency
   try {
-    const response = await fetch('http://ip-api.com/json/');
+    const response = await fetch('https://ipapi.co/json/');
     if (!response.ok) {
       throw new Error('Failed to fetch country information');
     }
     const data = await response.json();
-    const country = data.countryCode;
-    homeCurrency = currency.getHomeCurrency(country);
+    if (!_.isNil(data.currency)) {
+      homeCurrency = data.currency.toUpperCase()
+    } else if (!_.isNil(data.country)) {
+      homeCurrency = currency.getHomeCurrency(data.country);
+    } else {
+      throw new Error('Failed to obtain country/currency information from ipapi.co');
+    }
   } catch (error) {
-    console.error("Error fetching home currency:", error);
-    homeCurrency = 'USD'; // Fallback currency
+    console.error("Error while computing home currency using ipapi.co/json", error);
+    try {
+      const response = await fetch('http://ip-api.com/json/');
+      if (!response.ok) {
+        throw new Error('Failed to fetch country information from ip-api.com');
+      }
+      const data = await response.json();
+      const country = data.countryCode;
+      homeCurrency = currency.getHomeCurrency(country);
+    } catch {
+      console.error("Error while computing home currency using ip-api.com/json; Falling back to USD as home currency", error);
+      homeCurrency = 'USD'; // Fallback currency
+    }
   }
 }
+
+/**
+ * Adds multiple Mexp tokens if they haven't been added already.
+ * This function checks each token against a list of already added tokens to prevent duplicates.
+ * Preventing duplicates is important here since large no of duplicate/unnecessary tokens can slow down calculations
+ * 
+ * @param {Array} mexpTokens - An array of tokens to be added to the Mexp instance. Each token is an object
+ *                             that must at least contain a 'token' property.
+ */
+async function addMexpToken(mexpTokens) {
+  for (let mexpToken of mexpTokens) {
+    if (!addedMexpTokens.includes(mexpToken.token)) {
+      mexp.addToken([mexpToken]);
+      addedMexpTokens.push(mexpToken.token);
+    }
+  }
+}
+
 async function setupMexp() {
-  setupHomeCurrency()
+  await setupHomeCurrency()
 
   // allow x as a multipllcation token
-  mexp.addToken([{
+  await addMexpToken([{
     type: 2,
     token: "x",
     show: "&times;",
@@ -49,66 +84,32 @@ async function setupMexp() {
   try {
     // setup conversionRates
     conversionRates = await currency.getConversionRates();
+
     var homeCurrencyConversionTokens = [];
-    var otherCurrencyConversionTokens = []
-    // Dynamically add conversion tokens for all supported currencies to home currency
-    // example, if 1 USD = 83 INR
-    Object.entries(conversionRates).forEach(([currencyCode, conversionRate]) => {
-      homeCurrencyConversionTokens.push({
-        type: 7,
-        token: currencyCode.toLowerCase(),
-        show: currencyCode.toUpperCase(),
-        value: function (n) {
-          return n * conversionRate[homeCurrency];
-        }
-      });
-    });
-    mexp.addToken([...homeCurrencyConversionTokens])
 
     // dynamically adding conversion token to convert from one currency to another currency
     // example: '1 usd to gbp' should consider 'usd to gbp' as token and do the conversion
     // example: '1 usd in gbp' should consider 'usd in gbp' as token and do the conversion
     Object.entries(conversionRates).forEach(([fromCurrencyCode, rates]) => {
-      Object.entries(rates).forEach(([toCurrencyCode, rate]) => {
-        const token = `${fromCurrencyCode.toLowerCase()} to ${toCurrencyCode.toLowerCase()}`;
-        otherCurrencyConversionTokens.push({
-          type: 7,
-          token: token,
-          show: `${fromCurrencyCode.toUpperCase()} to ${toCurrencyCode.toUpperCase()}`,
-          value: function (n) {
-            return n * rate;
-          }
-        });
-
-        otherCurrencyConversionTokens.push({
-          type: 7,
-          token: token,
-          show: `${fromCurrencyCode.toUpperCase()} in ${toCurrencyCode.toUpperCase()}`,
-          value: function (n) {
-            return n * rate; // Convert using the rate from fromCurrencyCode in toCurrencyCode
-          }
-        });
-
+      // Dynamically add conversion tokens for all supported currencies to home currency
+      // example, if 1 USD = 83 INR
+      homeCurrencyConversionTokens.push({
+        type: 7,
+        token: fromCurrencyCode.toLowerCase(),
+        show: fromCurrencyCode.toUpperCase(),
+        value: function (n) {
+          return n * rates[homeCurrency];
+        }
       });
+
     });
-    mexp.addToken([...otherCurrencyConversionTokens])
+
+    await mexp.addToken([...homeCurrencyConversionTokens])
 
   } catch (error) {
     console.error("Error setting up currency tokens:", error);
   }
 
-
-}
-
-
-async function init() {
-  await setupMexp();
-  setupDocument();
-  await loadData();
-  setupListeners();
-  tokenize(editor.innerText, "init");
-  updateOutputDisplay();
-  removeOverlay();
 }
 
 function setupDocument() {
@@ -286,7 +287,6 @@ function updateWindowTitle(value) {
 
 function onEditorKeydown(e) {
   let key = e.key;
-
   switch (key) {
     case "Tab":
       e.preventDefault();
@@ -299,6 +299,42 @@ function insertNode(...nodes) {
   for (let node of nodes) {
     document.execCommand("insertText", false, node);
   }
+}
+
+function addCurrencyConversiontokens(currencyConversionStrings) {
+  const currencyConversionKeywords = currencyConversionStrings.map(str => str.match(regex.CURRENCY_CONVERSION_KEYWORDS)[0]);
+
+  // find the converstion rate for the specific currency conversion using the conversionRates object
+  // then add that one particular token only to mexp, if not added already to addedMexpTokens
+  currencyConversionKeywords.forEach(keyword => {
+    // Split the keyword to get from and to currency codes
+
+    var [fromCurrency, preposition, toCurrency] = keyword.trim().split(/\s(to|in)\s/);
+    fromCurrency = fromCurrency.toUpperCase(), toCurrency = toCurrency.toUpperCase()
+
+    const tokenString = `${fromCurrency.toLowerCase()} ${preposition} ${toCurrency.toLowerCase()}`;
+
+    // Check if this specific conversion token has not been added yet
+    if (!addedMexpTokens.includes(tokenString)) {
+
+      // Check if the conversion rate exists for the specified conversion
+      if (!_.isEmpty(conversionRates[fromCurrency]) && conversionRates[fromCurrency][toCurrency]) {
+        const rate = conversionRates[fromCurrency][toCurrency];
+        // Define the conversion token
+        const conversionToken = {
+          type: 7,
+          token: tokenString,
+          show: `${fromCurrency.toUpperCase()} ${preposition} ${toCurrency.toUpperCase()}`,
+          value: function (n) {
+            return n * rate;
+          }
+        };
+        // Add the token to Mexp and mark it as added
+        mexp.addToken([conversionToken]);
+        addedMexpTokens.push(tokenString);
+      }
+    }
+  });
 }
 
 function tokenize(value, src) {
@@ -324,6 +360,10 @@ function tokenize(value, src) {
     let heading = str.match(regex.HEADING);
     let variable = str.match(regex.VARIABLE);
     let words = str.match(regex.WORD);
+    let currencyConversion = str.match(regex.CURRENCY_CONVERSION);
+    if (currencyConversion) {
+      addCurrencyConversiontokens(currencyConversion);
+    }
 
     if (!lastEditStr || str !== lastEditStr) {
       isEdited = true; // Mark lines that are edited
@@ -600,4 +640,15 @@ async function copyValueToClipboard(value) {
   } catch (err) {
     alert(chrome.i18n.getMessage("clipboard_failure"));
   }
+}
+
+async function init() {
+  setupDocument();
+  await loadData();
+  await setupMexp();
+
+  setupListeners();
+  tokenize(editor.innerText, "init");
+  updateOutputDisplay();
+  removeOverlay();
 }
