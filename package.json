@@ -12,6 +12,7 @@
     "start": "xt-build -e dev -w",
     "start:firefox": "xt-build -e dev -p firefox -w",
     "build": "xt-clean && xt-build -e prod",
+    "build:dev": "xt-clean && xt-build -e dev -w",
     "build:firefox": "xt-build -e prod -p firefox",
     "watch": "npm-watch",
     "clean": "xt-clean",
@@ -54,7 +55,7 @@
     "country-to-currency": "^1.1.5",
     "extension-cli": "^1.2.4",
     "lodash": "^4.17.21",
-    "math-expression-evaluator": "^2.0.5",
+    "mathjs": "^12.4.1",
     "npm-watch": "^0.11.0"
   },
   "xtdocs": {
