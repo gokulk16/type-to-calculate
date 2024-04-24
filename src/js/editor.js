@@ -98,29 +98,25 @@ function convertXToMultiplication(lines) {
     // then convert them to '0x90 * 2', '0x90 *2', '0x90 * 2' since here 0x represents hexadecimal value
 
     let matchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
-
     let matchesOfHexa = [...lines[i].matchAll(regex.HEXADECIMAL_VALUE)];
-
 
     let XIndices = matchesOfX.map(ele => ele.index)
     let HexaIndices = matchesOfHexa.map(ele => ele.index)
+
     let filteredMatches = removeMatches(XIndices, HexaIndices);
+    // filteredMatches contains all the indexes where the x will be present on or after the index
+
     for (let index = 0; index < filteredMatches.length; index++) {
       lines[i] = replaceFirstXAfterIndex(lines[i], filteredMatches[index])
     }
-    // filteredMatches contains all the indexes where the x will be present on or after the index
-    // replace the first x on or after the index of the string str
 
     // if line still matches with regex.X_IN_EXPRESSION then go through the same operations once again
-    let ConfirmMatchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
+    let confirmMatchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
 
-    if (!_.isEmpty(ConfirmMatchesOfX)) {
-      matchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
-
+    if (!_.isEmpty(confirmMatchesOfX)) {
       matchesOfHexa = [...lines[i].matchAll(regex.HEXADECIMAL_VALUE)];
 
-
-      XIndices = matchesOfX.map(ele => ele.index)
+      XIndices = confirmMatchesOfX.map(ele => ele.index)
       HexaIndices = matchesOfHexa.map(ele => ele.index)
       filteredMatches = removeMatches(XIndices, HexaIndices);
       for (let index = 0; index < filteredMatches.length; index++) {
@@ -128,15 +124,16 @@ function convertXToMultiplication(lines) {
       }
     }
   }
-
   return lines
-
 }
 
 
 function useMathJs(lines) {
   var mjs_results = [];
+
+  // pre evaluation
   lines = convertXToMultiplication(lines)
+
   try {
     mjs_results = math.evaluate(lines);
   } catch (error) {
@@ -161,10 +158,12 @@ function useMathJs(lines) {
       // console.log('evaluation failed - - ', error);
     }
   }
+
+  // post evaluation
   for (const [i, result] of mjs_results.entries()) {
     try {
       // Convert non-number results to numbers if possible
-      if (!_.isNumber(result) && mjs_results[i] !== '') {
+      if (!_.isNumber(result)) {
         mjs_results[i] = result.toNumber()
       }
     } catch (error) {
@@ -172,6 +171,7 @@ function useMathJs(lines) {
       mjs_results[i] = ''; // Ensure non-convertible results are set to empty string
     }
   }
+
   return mjs_results;
 }
 
