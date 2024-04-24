@@ -362,6 +362,7 @@ function insertNode(...nodes) {
 
 function evaluate(value) {
   let lines = value.split("\n");
+  evaluatedValues = [];
   let results = useMathJs(lines);
   for (let index = 0; index < results.length; index++) {
     const result_expression = {
