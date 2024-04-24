@@ -3,22 +3,16 @@
 import * as storage from "./storage.js";
 import * as win from "./window.js";
 import * as currency from "./currency.js";
-import * as constants from "./constants.js";
 import * as regex from "./regex.js";
-import * as reserved from "./reserved.js";
-const Mexp = require('math-expression-evaluator')
 const _ = require("lodash");
+const math = require('mathjs')
 
 let editor;
 let output;
 let docId;
 let conversionRates;
 let homeCurrency;
-let addedMexpTokens = []; // records all tokens are added to mexp while execution. Holds only the token string.
-let lastEdit = []; // Last known edit by line
-let expressions = []; // All tokenized expressions by line
-const mexp = new Mexp();
-
+let evaluatedValues = []; // All evaluated expressions by line
 
 document.addEventListener("DOMContentLoaded", init);
 
@@ -50,42 +44,17 @@ async function setupHomeCurrency() {
       console.error("Error while computing home currency using ip-api.com/json; Falling back to USD as home currency", error);
       homeCurrency = 'USD'; // Fallback currency
     }
+  } finally {
+    math.createUnit(homeCurrency.toLowerCase())
   }
 }
 
-/**
- * Adds multiple Mexp tokens if they haven't been added already.
- * This function checks each token against a list of already added tokens to prevent duplicates.
- * Preventing duplicates is important here since large no of duplicate/unnecessary tokens can slow down calculations
- * 
- * @param {Array} mexpTokens - An array of tokens to be added to the Mexp instance. Each token is an object
- *                             that must at least contain a 'token' property.
- */
-async function addMexpToken(mexpTokens) {
-  for (let mexpToken of mexpTokens) {
-    if (!addedMexpTokens.includes(mexpToken.token)) {
-      mexp.addToken([mexpToken]);
-      addedMexpTokens.push(mexpToken.token);
-    }
-  }
-}
-
-async function setupMexp() {
+async function setupEvaluator() {
   await setupHomeCurrency()
-
-  // allow x as a multipllcation token
-  await addMexpToken([{
-    type: 2,
-    token: "x",
-    show: "&times;",
-    value: mexp.math.mul
-  }]);
 
   try {
     // setup conversionRates
     conversionRates = await currency.getConversionRates();
-
-    var homeCurrencyConversionTokens = [];
 
     // dynamically adding conversion token to convert from one currency to another currency
     // example: '1 usd to gbp' should consider 'usd to gbp' as token and do the conversion
@@ -93,23 +62,117 @@ async function setupMexp() {
     Object.entries(conversionRates).forEach(([fromCurrencyCode, rates]) => {
       // Dynamically add conversion tokens for all supported currencies to home currency
       // example, if 1 USD = 83 INR
-      homeCurrencyConversionTokens.push({
-        type: 7,
-        token: fromCurrencyCode.toLowerCase(),
-        show: fromCurrencyCode.toUpperCase(),
-        value: function (n) {
-          return n * rates[homeCurrency];
+
+      if (fromCurrencyCode !== homeCurrency) {
+        try {
+          math.createUnit(fromCurrencyCode.toLowerCase(), math.unit(1 * rates[homeCurrency], homeCurrency.toLowerCase()));
+        } catch {
+          try {
+            math.createUnit(fromCurrencyCode.toUpperCase(), math.unit(1 * rates[homeCurrency], homeCurrency.toLowerCase()));
+          } catch {
+            console.log(`couldnt add ${fromCurrencyCode.toUpperCase()} or ${fromCurrencyCode.toLowerCase()} as currency unit`)
+          }
         }
-      });
-
+      }
     });
-
-    await mexp.addToken([...homeCurrencyConversionTokens])
-
   } catch (error) {
     console.error("Error setting up currency tokens:", error);
   }
 
+}
+
+function removeMatches(supersetArray, removeArray) {
+  let result = supersetArray.filter(match => !removeArray.includes(match));
+  return result;
+}
+
+function replaceFirstXAfterIndex(str, index) {
+  return str.substring(0, index) + str.substring(index).replace('x', '*');
+}
+function convertXToMultiplication(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    // Converting 'x' as a mutiplication operator. 
+    // for these examples: 'data x 2', 'data x2', '2x2', '2 x2', '2x 2', '2 x 2', '2x data', '2 x data', '2x2x2', data x 2 x data', '2x2x2 x2 x x2 x2 x2 x 2 x 22' 
+    // then convert the 'x' to '*' in that line
+    // for these examples: '0x90 x 2', '0x90 x2', '0x90 x 2'
+    // then convert them to '0x90 * 2', '0x90 *2', '0x90 * 2' since here 0x represents hexadecimal value
+
+    let matchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
+    let matchesOfHexa = [...lines[i].matchAll(regex.HEXADECIMAL_VALUE)];
+
+    let XIndices = matchesOfX.map(ele => ele.index)
+    let HexaIndices = matchesOfHexa.map(ele => ele.index)
+
+    let filteredMatches = removeMatches(XIndices, HexaIndices);
+    // filteredMatches contains all the indexes where the x will be present on or after the index
+
+    for (let index = 0; index < filteredMatches.length; index++) {
+      lines[i] = replaceFirstXAfterIndex(lines[i], filteredMatches[index])
+    }
+
+    // if line still matches with regex.X_IN_EXPRESSION then go through the same operations once again
+    let confirmMatchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
+
+    if (!_.isEmpty(confirmMatchesOfX)) {
+      matchesOfHexa = [...lines[i].matchAll(regex.HEXADECIMAL_VALUE)];
+
+      XIndices = confirmMatchesOfX.map(ele => ele.index)
+      HexaIndices = matchesOfHexa.map(ele => ele.index)
+      filteredMatches = removeMatches(XIndices, HexaIndices);
+      for (let index = 0; index < filteredMatches.length; index++) {
+        lines[i] = replaceFirstXAfterIndex(lines[i], filteredMatches[index])
+      }
+    }
+  }
+  return lines
+}
+
+
+function useMathJs(lines) {
+  var mjs_results = [];
+
+  // pre evaluation
+  lines = convertXToMultiplication(lines)
+
+  try {
+    mjs_results = math.evaluate(lines);
+  } catch (error) {
+    /* evaluate individual lines from index 0
+    * if any line is throwing an error, then put empty string for that line and continue
+    * if no error, then add that line also to evaluate next time
+    */
+    try {
+      var tmpLines = []; // remove errored lines and execute the rest
+      for (let index = 0; index < lines.length; index++) {
+        try {
+          tmpLines.push(lines[index]);
+          var lineResult = math.evaluate(tmpLines);
+          mjs_results[index] = lineResult[index]
+        } catch (error) {
+          console.log(`Couldn't evaluate: ${lines[index]}`);
+          mjs_results[index] = undefined;
+          tmpLines[index] = ''; // Put empty string for lines that throw an error
+        }
+      }
+    } catch (error) {
+      // console.log('evaluation failed - - ', error);
+    }
+  }
+
+  // post evaluation
+  for (const [i, result] of mjs_results.entries()) {
+    try {
+      // Convert non-number results to numbers if possible
+      if (!_.isNumber(result)) {
+        mjs_results[i] = result.toNumber()
+      }
+    } catch (error) {
+      console.log('no result for line ', i + 1)
+      mjs_results[i] = ''; // Ensure non-convertible results are set to empty string
+    }
+  }
+
+  return mjs_results;
 }
 
 function setupDocument() {
@@ -141,7 +204,6 @@ async function loadData() {
 
   if (data.text) {
     editor.innerText = data.text;
-    lastEdit = data.text.split("\n");
   }
 
   updateWindowTitle(data.title);
@@ -176,11 +238,8 @@ async function onEditorInput() {
 
 function parse(value) {
   output.innerText = "";
-  tokenize(value);
-
+  evaluate(value);
   updateOutputDisplay();
-
-  lastEdit = value.split("\n");
 }
 
 function updateOutputDisplay() {
@@ -301,277 +360,24 @@ function insertNode(...nodes) {
   }
 }
 
-function addCurrencyConversiontokens(currencyConversionStrings) {
-  const currencyConversionKeywords = currencyConversionStrings.map(str => str.match(regex.CURRENCY_CONVERSION_KEYWORDS)[0]);
-
-  // find the converstion rate for the specific currency conversion using the conversionRates object
-  // then add that one particular token only to mexp, if not added already to addedMexpTokens
-  currencyConversionKeywords.forEach(keyword => {
-    // Split the keyword to get from and to currency codes
-
-    var [fromCurrency, preposition, toCurrency] = keyword.trim().split(/\s(to|in)\s/);
-    fromCurrency = fromCurrency.toUpperCase(), toCurrency = toCurrency.toUpperCase()
-
-    const tokenString = `${fromCurrency.toLowerCase()} ${preposition} ${toCurrency.toLowerCase()}`;
-
-    // Check if this specific conversion token has not been added yet
-    if (!addedMexpTokens.includes(tokenString)) {
-
-      // Check if the conversion rate exists for the specified conversion
-      if (!_.isEmpty(conversionRates[fromCurrency]) && conversionRates[fromCurrency][toCurrency]) {
-        const rate = conversionRates[fromCurrency][toCurrency];
-        // Define the conversion token
-        const conversionToken = {
-          type: 7,
-          token: tokenString,
-          show: `${fromCurrency.toUpperCase()} ${preposition} ${toCurrency.toUpperCase()}`,
-          value: function (n) {
-            return n * rate;
-          }
-        };
-        // Add the token to Mexp and mark it as added
-        mexp.addToken([conversionToken]);
-        addedMexpTokens.push(tokenString);
-      }
-    }
-  });
-}
-
-function tokenize(value, src) {
+function evaluate(value) {
   let lines = value.split("\n");
-  let token;
-
-  let isEdited = false;
-  let editedVariables = [];
-
-  for (const [i, line] of lines.entries()) {
-    let str = line;
-    let lastEditStr = lastEdit[i];
-
-    if (str.match(regex.TAB)) {
-      str = removeTabs(str);
-    }
-
-    if (lastEdit[i] && lastEditStr.match(regex.TAB)) {
-      lastEditStr = removeTabs(lastEditStr);
-    }
-
-    let comment = str.match(regex.COMMENT);
-    let heading = str.match(regex.HEADING);
-    let variable = str.match(regex.VARIABLE);
-    let words = str.match(regex.WORD);
-    let currencyConversion = str.match(regex.CURRENCY_CONVERSION);
-    if (currencyConversion) {
-      addCurrencyConversiontokens(currencyConversion);
-    }
-
-    if (!lastEditStr || str !== lastEditStr) {
-      isEdited = true; // Mark lines that are edited
-    }
-
-    for (const variable of editedVariables) {
-      let nameBoundary = new RegExp(makeRegexBoundary(variable), "gu");
-
-      if (str.match(nameBoundary)) {
-        isEdited = true; // Mark lines that contain edited variables
-      }
-    }
-
-    if (isEdited || src === "init") {
-      isEdited = false;
-
-      if (str.length === 0) {
-        token = {
-          type: "newline",
-          value: "",
-        };
-      } else if (comment || heading) {
-        token = {
-          type: "comment",
-          value: str.trim(),
-        };
-      } else {
-        // Expand abbrebiated numbers
-        if (str.match(regex.SUFFIX)) {
-          let matches = [...str.matchAll(regex.SUFFIX)];
-
-          for (const match of matches) {
-            let m = match[0];
-            let value = match[1];
-            let modifier = match[2];
-            let newValue;
-
-            switch (modifier) {
-              case "k":
-              case "K":
-                newValue = value * 1000;
-                str = str.replace(m, newValue);
-                break;
-              case "M":
-                newValue = value * 1000000;
-                str = str.replace(m, newValue);
-                break;
-              case "B":
-                newValue = value * 1000000000;
-                str = str.replace(m, newValue);
-                break;
-            }
-          }
-        }
-
-        if (variable) {
-          token = getVariableToken(str, expressions, i);
-        } else {
-          let tmp = str;
-
-          if (tmp.includes("=")) {
-            tmp = tmp.replace("=", "");
-          }
-
-          if (words) {
-            for (const word of words) {
-              let isConstant = validateWord(constants.IDENTIFIERS, word);
-
-              if (isConstant) {
-                let find = constants.CONSTANTS.find(
-                  (x) => x.indentifier === word
-                );
-                tmp = replaceTextWithValue(tmp, word, find.value);
-              }
-
-              let obj = expressions.find((x) => x.name === word);
-              tmp = obj ? replaceTextWithValue(tmp, word, obj.value) : tmp;
-            }
-          }
-
-          if (hasNumber(tmp)) {
-            let result;
-            let val = tmp.trim();
-
-            try {
-              result = mexp.eval(val);
-            } catch (err) {
-              result;
-            }
-
-            token = {
-              type: "expression",
-              value: tmp.trim(),
-              result: result,
-            };
-          } else {
-            token = {
-              type: "comment",
-              value: tmp.trim(),
-            };
-          }
-        }
-      }
-
-      expressions[i] = token;
-    }
-  }
-
-  function getVariableToken(str, expressions, i) {
-    let split = str.split("=");
-    let name = split[0].trim();
-    let value = split[1].trim();
-
-    if (expressions[i] && expressions[i].name !== name) {
-      // If the variable name is modified...
-      editedVariables.push(expressions[i].name); // Store the previous name...
-      editedVariables.push(name); // And the new name
-    } else {
-      editedVariables.push(name);
-    }
-
-    let isReserved = validateWord(reserved.IDENTIFIERS, name);
-    let isExistingVariableIndex = expressions.findIndex((x) => x.name === name);
-
-    if (isReserved) {
-      return {
-        type: "error",
-        name: name,
-        value: chrome.i18n.getMessage("error_invalid_variable"),
-      };
-    }
-
-    if (isExistingVariableIndex < i && isExistingVariableIndex !== -1) {
-      return {
-        type: "error",
-        name: name,
-        value: chrome.i18n.getMessage("error_duplicate_variable"),
-      };
-    }
-
-    let words = value.match(regex.WORD);
-
-    if (words) {
-      for (const word of words) {
-        let isConstant = validateWord(constants.IDENTIFIERS, word);
-
-        if (isConstant) {
-          let find = constants.CONSTANTS.find((x) => x.indentifier === word);
-          value = replaceTextWithValue(value, word, find.value);
-        }
-
-        let obj = expressions.find((x) => x.name === word);
-        value = obj
-          ? replaceTextWithValue(value, word, obj.value)
-          : value.replace(word, "");
-      }
-    }
-
-    let boundary = /^(\d+(?:\.\d+)?)$/gm; // Any number with optional decimal point
-
-    if (!value.match(boundary)) {
-      try {
-        value = mexp.eval(value);
-      } catch (err) {
-        console.log('waiting for boundary in the expression')
-      }
-    }
-
-    value = Number(value);
-
-    if (isNaN(value)) {
-      value = "";
-    }
-
-    return {
-      type: "variable",
-      name: name,
-      value: value,
+  evaluatedValues = [];
+  let results = useMathJs(lines);
+  for (let index = 0; index < results.length; index++) {
+    const result_expression = {
+      type: "expression",
+      value: lines[index].trim(),
+      result: results[index],
     };
+    evaluatedValues[index] = result_expression;
   }
-
-  function replaceTextWithValue(str, find, replace) {
-    return str.replace(new RegExp(makeRegexBoundary(find), "giu"), replace);
-  }
-
-  function makeRegexBoundary(str) {
-    return "(?<=^|\\P{L})" + str + "(?=\\P{L}|$)";
-  }
-
-  function hasNumber(str) {
-    return /\d/.test(str);
-  }
-
-  if (expressions.length !== lines.length) {
-    expressions.length = lines.length;
-  }
-
-  editedVariables = []; // Reset
-}
-
-function removeTabs(value) {
-  return value.replace(/\t/g, "");
 }
 
 function getResultTokens() {
   let results = [];
 
-  for (const expression of expressions) {
+  for (const expression of evaluatedValues) {
     switch (expression.type) {
       case "newline":
       case "comment":
@@ -613,12 +419,6 @@ function getResultTokens() {
   return results;
 }
 
-function validateWord(arr, word) {
-  let status = arr.includes(word);
-
-  return status;
-}
-
 function onOutputClick(e) {
   let shiftPressed = e.shiftKey;
   let classes = ["result", "variable"];
@@ -645,10 +445,10 @@ async function copyValueToClipboard(value) {
 async function init() {
   setupDocument();
   await loadData();
-  await setupMexp();
+  await setupEvaluator();
 
   setupListeners();
-  tokenize(editor.innerText, "init");
+  evaluate(editor.innerText);
   updateOutputDisplay();
   removeOverlay();
 }

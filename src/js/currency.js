@@ -58,8 +58,8 @@ export async function getConversionRates() {
             await storage.save('currenciesApiData', currencyApiData);
         } else {
             currencyApiData = cachedApiData;
+            console.log('Currency conversion data taken from local storage cache')
         }
-
     } else {
         currencyApiData = await fetchCurrencyRatesFromAPI();
         await storage.save('currenciesApiData', currencyApiData);
