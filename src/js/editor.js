@@ -14,7 +14,6 @@ let conversionRates;
 let homeCurrency;
 let evaluatedValues = []; // All evaluated expressions by line
 
-
 document.addEventListener("DOMContentLoaded", init);
 
 async function setupHomeCurrency() {
@@ -82,21 +81,95 @@ async function setupEvaluator() {
 
 }
 
+function removeMatches(supersetArray, removeArray) {
+  let result = supersetArray.filter(match => !removeArray.includes(match));
+  return result;
+}
+
+function replaceFirstXAfterIndex(str, index) {
+  return str.substring(0, index) + str.substring(index).replace('x', '*');
+}
+function convertXToMultiplication(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    // Converting 'x' as a mutiplication operator. 
+    // for these examples: 'data x 2', 'data x2', '2x2', '2 x2', '2x 2', '2 x 2', '2x data', '2 x data', '2x2x2', data x 2 x data', '2x2x2 x2 x x2 x2 x2 x 2 x 22' 
+    // then convert the 'x' to '*' in that line
+    // for these examples: '0x90 x 2', '0x90 x2', '0x90 x 2'
+    // then convert them to '0x90 * 2', '0x90 *2', '0x90 * 2' since here 0x represents hexadecimal value
+
+    let matchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
+
+    let matchesOfHexa = [...lines[i].matchAll(regex.HEXADECIMAL_VALUE)];
+
+
+    let XIndices = matchesOfX.map(ele => ele.index)
+    let HexaIndices = matchesOfHexa.map(ele => ele.index)
+    let filteredMatches = removeMatches(XIndices, HexaIndices);
+    for (let index = 0; index < filteredMatches.length; index++) {
+      lines[i] = replaceFirstXAfterIndex(lines[i], filteredMatches[index])
+    }
+    // filteredMatches contains all the indexes where the x will be present on or after the index
+    // replace the first x on or after the index of the string str
+
+    // if line still matches with regex.X_IN_EXPRESSION then go through the same operations once again
+    let ConfirmMatchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
+
+    if (!_.isEmpty(ConfirmMatchesOfX)) {
+      matchesOfX = [...lines[i].matchAll(regex.X_IN_EXPRESSION)];
+
+      matchesOfHexa = [...lines[i].matchAll(regex.HEXADECIMAL_VALUE)];
+
+
+      XIndices = matchesOfX.map(ele => ele.index)
+      HexaIndices = matchesOfHexa.map(ele => ele.index)
+      filteredMatches = removeMatches(XIndices, HexaIndices);
+      for (let index = 0; index < filteredMatches.length; index++) {
+        lines[i] = replaceFirstXAfterIndex(lines[i], filteredMatches[index])
+      }
+    }
+  }
+
+  return lines
+
+}
+
+
 function useMathJs(lines) {
   var mjs_results = [];
-
-  // if any line contains 'x' as a ,utiplication operator. 
-  // example: 'data x 2', 'data x2', '2x2', '2 x2', '2x 2', '2 x 2', '2x data', '2 x data'
-  // then convert the 'x' to '*' in that line
-  lines = lines.map(line => line.replace(regex.X_AS_MULTIPLICATION, '$1 * $2'));
-  mjs_results = math.evaluate(lines);
+  lines = convertXToMultiplication(lines)
+  try {
+    mjs_results = math.evaluate(lines);
+  } catch (error) {
+    /* evaluate individual lines from index 0
+    * if any line is throwing an error, then put empty string for that line and continue
+    * if no error, then add that line also to evaluate next time
+    */
+    try {
+      var tmpLines = []; // remove errored lines and execute the rest
+      for (let index = 0; index < lines.length; index++) {
+        try {
+          tmpLines.push(lines[index]);
+          var lineResult = math.evaluate(tmpLines);
+          mjs_results[index] = lineResult[index]
+        } catch (error) {
+          console.log(`Couldn't evaluate: ${lines[index]}`);
+          mjs_results[index] = undefined;
+          tmpLines[index] = ''; // Put empty string for lines that throw an error
+        }
+      }
+    } catch (error) {
+      // console.log('evaluation failed - - ', error);
+    }
+  }
   for (const [i, result] of mjs_results.entries()) {
     try {
-      if (!_.isNumber(result)) {
+      // Convert non-number results to numbers if possible
+      if (!_.isNumber(result) && mjs_results[i] !== '') {
         mjs_results[i] = result.toNumber()
       }
     } catch (error) {
       console.log('no result for line ', i + 1)
+      mjs_results[i] = ''; // Ensure non-convertible results are set to empty string
     }
   }
   return mjs_results;
@@ -287,7 +360,7 @@ function insertNode(...nodes) {
   }
 }
 
-function evaluate(value, src) {
+function evaluate(value) {
   let lines = value.split("\n");
   let results = useMathJs(lines);
   for (let index = 0; index < results.length; index++) {
@@ -296,7 +369,7 @@ function evaluate(value, src) {
       value: lines[index].trim(),
       result: results[index],
     };
-    evaluatedValues.push(result_expression)
+    evaluatedValues[index] = result_expression;
   }
 }
 
@@ -374,7 +447,7 @@ async function init() {
   await setupEvaluator();
 
   setupListeners();
-  evaluate(editor.innerText, "init");
+  evaluate(editor.innerText);
   updateOutputDisplay();
   removeOverlay();
 }
