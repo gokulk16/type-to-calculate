@@ -6,6 +6,7 @@ import * as currency from "./currency.js";
 import * as regex from "./regex.js";
 const _ = require("lodash");
 const math = require('mathjs')
+var showToast = require("show-toast");
 
 let editor;
 let output;
@@ -344,13 +345,33 @@ function updateWindowTitle(value) {
   }
 }
 
+function isNotEmptyResult(item) {
+  return !_.isEmpty(item) && _.isNumber(item.result)
+}
+
+// find the last not empty value from evaluatedValues
+function findLastValue() {
+  let lastValue = evaluatedValues.findLast(isNotEmptyResult);
+  return lastValue ? lastValue.result : null;
+}
+
+async function copyLastValue() {
+  // copy the last result to clipboard
+  const lastValue = findLastValue();
+  if (_.isNumber(lastValue)) {
+    copyValueToClipboard(lastValue)
+  } else {
+    showToastMessage(`No result to copy`)
+  }
+}
+
 function onEditorKeydown(e) {
   let key = e.key;
-  switch (key) {
-    case "Tab":
-      e.preventDefault();
-      insertNode("\t");
-      break;
+  if (key === "Tab") {
+    e.preventDefault();
+    insertNode("\t");
+  } else if (key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    copyLastValue();
   }
 }
 
@@ -420,23 +441,43 @@ function getResultTokens() {
 }
 
 function onOutputClick(e) {
-  let shiftPressed = e.shiftKey;
+  let ctrlPressed;
+  let shiftPressed;
+  let metaPressed;
+  let modifierKeyPressed = false;
   let classes = ["result", "variable"];
+
+  try {
+    ctrlPressed = e.ctrlKey;
+    shiftPressed = e.shiftKey;
+    metaPressed = e.metaKey;
+  } finally {
+    modifierKeyPressed = ctrlPressed || shiftPressed || metaPressed;
+  }
 
   if (classes.some((className) => e.target.classList.contains(className))) {
     let value = e.target.dataset.value;
 
-    if (!shiftPressed) {
+    if (modifierKeyPressed) {
       insertNode(value);
     } else {
       copyValueToClipboard(value);
+
     }
   }
+}
+async function showToastMessage(message, timeOut = 2000) {
+  showToast({
+    str: message,
+    time: timeOut,
+    position: 'bottom'
+  })
 }
 
 async function copyValueToClipboard(value) {
   try {
     await navigator.clipboard.writeText(value);
+    showToastMessage(`Copied '${value}' to clipboard.`)
   } catch (err) {
     alert(chrome.i18n.getMessage("clipboard_failure"));
   }
