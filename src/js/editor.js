@@ -4,6 +4,10 @@ import * as storage from "./storage.js";
 import * as win from "./window.js";
 import * as currency from "./currency.js";
 import * as regex from "./regex.js";
+import helpOperators from "./help_operators.json";
+import helpShortcuts from "./help_shortcuts.json";
+import helpUnits from "./help_units.json";
+
 const _ = require("lodash");
 const math = require('mathjs')
 var showToast = require("show-toast");
@@ -11,8 +15,11 @@ var showToast = require("show-toast");
 let editor;
 let output;
 let docId;
+let helpButton;
+let helpOverlay;
 let conversionRates;
 let homeCurrency;
+let showHelp = false;
 let evaluatedValues = []; // All evaluated expressions by line
 
 document.addEventListener("DOMContentLoaded", init);
@@ -48,6 +55,78 @@ async function setupHomeCurrency() {
   } finally {
     math.createUnit(homeCurrency.toLowerCase())
   }
+}
+
+function toggleHelpOverlay() {
+  if (showHelp) {
+    onOverlayClick();
+  } else {
+    onHelpClick();
+  }
+}
+
+function onHelpClick() {
+  showHelp = true;
+  document.getElementById("help-overlay").style.display = "block";
+}
+
+function onOverlayClick() {
+  showHelp = false;
+  document.getElementById("help-overlay").style.display = "none";
+  editor.focus();
+}
+
+async function createHelpTables() {
+  // Operator Table
+  const operatorColumns = ['Name', 'Operator', 'Example'];
+  const operatorsDataa = [...helpOperators.operators];
+  const operatorTableHtml = createTable(operatorColumns, operatorsDataa);
+  document.getElementById('operator-table-container').innerHTML = operatorTableHtml;
+
+  // Keyboard shortcut table
+  const shortcutColumns = ['Action', 'Shortcut'];
+  const shortcutsData = [...helpShortcuts.shortcuts];
+  const shortcutTableHtml = createTable(shortcutColumns, shortcutsData);
+  document.getElementById('shortcut-table-container').innerHTML = shortcutTableHtml;
+
+
+  // Units table
+  const unitColumns = ['Value', 'Units'];
+  const unitsData = [...helpUnits.units];
+  const unitTableHtml = createTable(unitColumns, unitsData);
+  document.getElementById('unit-table-container').innerHTML = unitTableHtml;
+}
+
+function createTable(columns, data) {
+  let table = '<table>';
+
+  // Create table header
+  table += '<thead><tr>';
+  columns.forEach(column => {
+    table += `<th>${column}</th>`;
+  });
+  table += '</tr></thead>';
+
+  // Create table body
+  table += '<tbody>';
+  data.forEach(row => {
+    table += '<tr>';
+    columns.forEach(column => {
+      table += `<td>`;
+
+      if (Array.isArray(row[column])) {
+        row[column].forEach(item => {
+          table += `${item}</br>`;
+        });
+      } else {
+        table += `${row[column]}`;
+      }
+      table += '</td>';
+    });
+    table += '</tr>';
+  });
+  table += '</tbody></table>';
+  return table;
 }
 
 async function setupEvaluator() {
@@ -181,6 +260,9 @@ function setupDocument() {
   editor.focus();
   output = document.getElementById("output");
   docId = getDocId();
+  helpButton = document.getElementById("help-button");
+  helpOverlay = document.getElementById("help-overlay");
+  createHelpTables();
 }
 
 function removeOverlay() {
@@ -218,6 +300,8 @@ function setupListeners() {
   editor.addEventListener("input", onEditorInput, false);
   editor.addEventListener("keydown", onEditorKeydown, false);
   output.addEventListener("click", onOutputClick, false);
+  helpButton.addEventListener("click", onHelpClick, false);
+  helpOverlay.addEventListener("click", onOverlayClick, false);
   window.addEventListener("resize", onWindowResize);
   chrome.storage.onChanged.addListener(onStorageChanged);
 }
@@ -372,6 +456,8 @@ function onEditorKeydown(e) {
     insertNode("\t");
   } else if (key === "Enter" && (e.metaKey || e.ctrlKey)) {
     copyLastValue();
+  } else if (key === "/" && (e.metaKey || e.ctrlKey)) {
+    toggleHelpOverlay();
   }
 }
 
