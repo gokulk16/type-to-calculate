@@ -1,4 +1,5 @@
 # type-to-calculate
+![Known Vulnerabilities](https://snyk.io/test/github/gokulk16/type-to-calculate/badge.svg)
 
 Just type from the keyboard and do the math. No need to open the calculator.
 
